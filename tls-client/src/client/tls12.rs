@@ -432,6 +432,11 @@ impl State<ClientConnectionData> for ExpectServerKx {
         ecdhe.params.encode(&mut kx_params);
         let server_kx = ServerKxDetails::new(kx_params, ecdhe.dss);
 
+        // let group = ecdhe.params.curve_params.named_group;
+        // let key = ecdhe.params.public.0;
+        // let pk = PublicKey { group, key };
+        // cx.common.handshaker.set_server_key_share(pk).await?;
+
         #[cfg_attr(not(feature = "logging"), allow(unused_variables))]
         {
             debug!("ECDHE curve is {:?}", ecdhe.params.curve_params);

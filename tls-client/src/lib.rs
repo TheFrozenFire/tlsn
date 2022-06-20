@@ -260,7 +260,7 @@
     clippy::use_self,
     trivial_casts,
     trivial_numeric_casts,
-    missing_docs,
+    //missing_docs,
     //unreachable_pub,
     unused_import_braces,
     unused_extern_crates,
@@ -334,7 +334,7 @@ mod bs_debug;
 mod builder;
 mod key_log;
 mod key_log_file;
-mod kx;
+pub mod kx;
 mod ticketer;
 
 /// Internal classes which may be useful outside the library.

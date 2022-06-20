@@ -1,6 +1,6 @@
 use crate::client::ClientConnectionData;
 use crate::error::Error;
-use crate::handshaker::{Handshake, InvalidHandShaker};
+use crate::handshaker::{Handshake, StandardHandshaker};
 #[cfg(feature = "logging")]
 use crate::log::{debug, error, trace, warn};
 use crate::record_layer;
@@ -600,7 +600,7 @@ impl CommonState {
             negotiated_version: None,
             side,
             record_layer: record_layer::RecordLayer::new(),
-            handshaker: Box::new(InvalidHandShaker {}),
+            handshaker: Box::new(StandardHandshaker::new()),
             suite: None,
             alpn_protocol: None,
             aligned_handshake: true,

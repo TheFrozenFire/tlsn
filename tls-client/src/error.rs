@@ -101,6 +101,18 @@ pub enum Error {
     /// The `max_fragment_size` value supplied in configuration was too small,
     /// or too large.
     BadMaxFragmentSize,
+
+    /// The peer does not support at least 1 TLS version which we support.
+    UnsupportedTLSVersion,
+
+    /// The peer does not support at least 1 ciphersuite which we support.
+    UnsupportedCiphersuite,
+
+    /// The peer sent an invalid public key for ECDH.
+    FailedToDecodeECDHPubkey,
+
+    /// The peer does not support at least 1 ECDH curve which we support.
+    UnsupportedCurve,
 }
 
 fn join<T: fmt::Debug>(items: &[T]) -> String {
@@ -168,6 +180,7 @@ impl fmt::Display for Error {
                 write!(f, "the supplied max_fragment_size was too small or large")
             }
             Error::General(ref err) => write!(f, "unexpected error: {}", err),
+            _ => write!(f, "unknown error"),
         }
     }
 }
