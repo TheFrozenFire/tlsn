@@ -427,7 +427,7 @@ impl Handshake for StandardHandshaker {
         match cipher_suite {
             CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
             | CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 => {
-                // extract client_write_key and client_write_iv. They may be at different
+                // extract server_write_key and server_write_iv. They may be at different
                 // offsets depending on the cipher suite.
                 let mut write_key = [0u8; 16];
                 let mut write_iv = [0u8; 4];
@@ -439,8 +439,8 @@ impl Handshake for StandardHandshaker {
                         ))
                     }
                 };
-                write_key.copy_from_slice(&session_keys[0..16]);
-                write_iv.copy_from_slice(&session_keys[32..36]);
+                write_key.copy_from_slice(&session_keys[16..32]);
+                write_iv.copy_from_slice(&session_keys[36..40]);
                 return Ok(Box::new(Decrypter::new(write_key, write_iv, cipher_suite)));
             }
             _ => {
@@ -574,8 +574,8 @@ impl Decrypter {
     }
 
     fn decrypt_aes128gcm(&self, m: &OpaqueMessage, seq: u64) -> Result<PlainMessage, Error> {
-        println!("IN decrypt_aes128gcm {:?}", m);
-        // TODO tls-client shouldnt call decrypt with CCS
+        println!("IN decrypt_aes128gcm {:?} {:?}", m, seq);
+        // TODO tls-client should NOT call decrypt with CCS
         if m.typ == ContentType::ChangeCipherSpec {
             return Ok(PlainMessage {
                 typ: m.typ,
@@ -584,7 +584,7 @@ impl Decrypter {
             });
         }
         let mut aad = [0u8; 13];
-        aad[..8].copy_from_slice(&seq.to_be_bytes());
+        aad[..8].copy_from_slice(&(seq - 1).to_be_bytes());
         aad[8] = m.typ.get_u8();
         aad[9..11].copy_from_slice(&m.version.get_u16().to_be_bytes());
         // 8-byte explicit nonce and 16-byte MAC are not counted towards

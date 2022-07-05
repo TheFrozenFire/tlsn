@@ -860,6 +860,7 @@ impl State<ClientConnectionData> for ExpectServerDone {
 
         cx.common.record_layer.set_message_encrypter(enc);
         cx.common.record_layer.set_message_decrypter(dec);
+        println!("Decrypter set");
 
         st.config
             .key_log
@@ -976,7 +977,7 @@ impl State<ClientConnectionData> for ExpectCcs {
         cx.common.check_aligned_handshake().await?;
 
         // nb. msgs layer validates trivial contents of CCS
-        cx.common.record_layer.start_decrypting();
+        // cx.common.record_layer.start_decrypting();
 
         Ok(Box::new(ExpectFinished {
             config: self.config,

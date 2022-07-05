@@ -9,7 +9,7 @@ use tls_core::msgs::message::{OpaqueMessage, PlainMessage};
 static SEQ_SOFT_LIMIT: u64 = 0xffff_ffff_ffff_0000u64;
 static SEQ_HARD_LIMIT: u64 = 0xffff_ffff_ffff_fffeu64;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum DirectionState {
     /// No keying material.
     Invalid,
@@ -95,6 +95,7 @@ impl RecordLayer {
     /// Start using the `MessageDecrypter` previously provided to the previous
     /// call to `prepare_message_decrypter`.
     pub(crate) fn start_decrypting(&mut self) {
+        println!("decrypt state is {:?}", self.decrypt_state);
         debug_assert!(self.decrypt_state == DirectionState::Prepared);
         self.decrypt_state = DirectionState::Active;
     }
