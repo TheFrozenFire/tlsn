@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use spansy::Spanned;
 use tlsn_core::{commitment::TranscriptCommitmentBuilder, Direction};
 
 use crate::{
@@ -301,6 +302,11 @@ pub trait HttpCommit {
         }
 
         for header in &response.headers {
+            // Skip empty headers
+            if header.value.span().is_empty() {
+                continue;
+            }
+
             self.commit_response_header(builder, direction, response, header)?;
         }
 
