@@ -175,6 +175,24 @@ pub struct Reveal {
 
 #[derive(Debug, Tsify, Deserialize)]
 #[tsify(from_wasm_abi)]
+pub struct HttpReveal {
+    pub reveal_structure: Option<bool>,
+    pub reveal_target: Option<bool>,
+
+    pub reveal_header_names: Option<bool>,
+    pub reveal_header_values: Option<bool>,
+    pub reveal_whole_body: Option<bool>,
+
+    pub reveal_body_json_structure: Option<bool>,
+
+    // (name, reveal_value)
+    pub headers: Option<Vec<(String, bool)>>,
+
+    pub body_json_paths: Option<Vec<String>>,
+}
+
+#[derive(Debug, Tsify, Deserialize)]
+#[tsify(from_wasm_abi)]
 pub enum KeyType {
     P256,
 }
