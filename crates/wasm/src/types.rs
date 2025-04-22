@@ -176,6 +176,13 @@ pub struct Reveal {
 #[derive(Debug, Tsify, Deserialize)]
 #[tsify(from_wasm_abi)]
 pub struct HttpReveal {
+    pub sent: HttpRevealDirection,
+    pub recv: HttpRevealDirection,
+}
+
+#[derive(Debug, Tsify, Deserialize)]
+#[tsify(from_wasm_abi)]
+pub struct HttpRevealDirection {
     pub reveal_structure: Option<bool>,
     pub reveal_target: Option<bool>,
 

@@ -84,66 +84,78 @@ pub fn build_presentation(
 pub fn build_http_presentation(
     attestation: &Attestation,
     secrets: &Secrets,
-    reveal_sent: HttpReveal,
-    reveal_recv: HttpReveal,
+    reveal: HttpReveal,
 ) -> Result<Presentation, JsError> {
+    let provider = CryptoProvider::default();
+
     let transcript = HttpTranscript::parse(secrets.0.transcript())?;
 
-    let mut builder = secrets.0.transcript_proof_builder();
+    let mut builder = attestation.0.presentation_builder(&provider);
+
+    builder.identity_proof(secrets.0.identity_proof());
+
+    let mut proof_builder = secrets.0.transcript_proof_builder();
 
     // Request
     let request = &transcript.requests[0];
 
-    if reveal_sent.reveal_structure.unwrap_or(false) {
-        builder.reveal_sent(&request.without_data())?;
+    if reveal.sent.reveal_structure.unwrap_or(false) {
+        proof_builder.reveal_sent(&request.without_data())?;
     }
 
-    if reveal_sent.reveal_header_names.unwrap_or(false) {
+    if reveal.sent.reveal_header_names.unwrap_or(false) {
         for header in &request.headers {
-            builder.reveal_sent(&header.without_value())?;
+            proof_builder.reveal_sent(&header.without_value())?;
         }
     }
 
-    if reveal_sent.reveal_target.unwrap_or(false) {
-        builder.reveal_sent(&request.request.target)?;
+    if reveal.sent.reveal_target.unwrap_or(false) {
+        proof_builder.reveal_sent(&request.request.target)?;
     }
 
-    if reveal_sent.reveal_header_values.unwrap_or(false) {
+    if reveal.sent.reveal_header_values.unwrap_or(false) {
         for header in &request.headers {
-            builder.reveal_sent(header)?;
+            proof_builder.reveal_sent(header)?;
         }
-    } else if let Some(headers) = reveal_sent.headers {
+    } else if let Some(headers) = reveal.sent.headers {
         for (name, reveal_value) in headers {
-            if let Some(request_headers) = request.headers.get(name) {
+            let request_headers: Vec<_> = request.headers.iter().filter(|header| header.name.as_str().to_lowercase() == name.to_lowercase()).collect();
+            if !request_headers.is_empty() {
                 for header in request_headers {
                     if reveal_value {
-                        builder.reveal_sent(header)?;
+                        proof_builder.reveal_sent(header)?;
                     } else {
-                        builder.reveal_sent(&header.without_value())?;
+                        proof_builder.reveal_sent(&header.without_value())?;
                     }
                 }
             }
         }
     }
 
-    if reveal_sent.reveal_whole_body {
-        builder.reveal_sent(&request.body)?;
+    if reveal.sent.reveal_whole_body.unwrap_or(false) {
+        if let Some(body) = &request.body {
+            proof_builder.reveal_sent(body)?;
+        }
     } else {
-        match &request.body.as_ref().unwrap().content {
-            BodyContent::Json(json) => {
-                if reveal_sent.reveal_body_json_structure {
-                    // TODO: Implement
-                }
+        if let Some(body) = &request.body {
+            match &body.content {
+                BodyContent::Json(json) => {
+                    if reveal.sent.reveal_body_json_structure.unwrap_or(false) {
+                        // TODO: Implement
+                    }
 
-                if let Some(paths) = reveal_sent.body_json_paths {
-                    for path in paths {
-                        builder.reveal_sent(json.get(path).unwrap())?;
+                    if let Some(paths) = reveal.sent.body_json_paths {
+                        for path in paths {
+                            proof_builder.reveal_sent(json.get(path.as_str()).unwrap())?;
+                        }
                     }
                 }
-            }
 
-            BodyContent::Unknown(span) => {
-                builder.reveal_sent(span)?;
+                BodyContent::Unknown(span) => {
+                    proof_builder.reveal_sent(span)?;
+                }
+
+                _ => {}
             }
         }
     }
@@ -151,74 +163,67 @@ pub fn build_http_presentation(
     // Response
     let response = &transcript.responses[0];
 
-    if reveal_recv.reveal_structure {
-        builder.reveal_recv(&response.without_data())?;
+    if reveal.recv.reveal_structure.unwrap_or(false) {
+        proof_builder.reveal_recv(&response.without_data())?;
     }
 
-    if reveal_recv.reveal_header_names {
+    if reveal.recv.reveal_header_names.unwrap_or(false) {
         for header in &response.headers {
-            builder.reveal_recv(&header.without_value())?;
+            proof_builder.reveal_recv(&header.without_value())?;
         }
-    }
-    
-    if reveal_recv.reveal_target {
-        builder.reveal_recv(&response.request.target)?;
     }
 
-    if reveal_recv.reveal_header_values {
+    if reveal.recv.reveal_header_values.unwrap_or(false) {
         for header in &response.headers {
-            builder.reveal_recv(&header)?;
+            proof_builder.reveal_recv(header)?;
         }
-    } else if let Some(headers) = reveal_recv.headers {
+    } else if let Some(headers) = reveal.recv.headers {
         for (name, reveal_value) in headers {
-            if let Some(response_headers) = response.headers.get(name) {
+            let response_headers: Vec<_> = response.headers.iter().filter(|header| header.name.as_str().to_lowercase() == name.to_lowercase()).collect();
+            if !response_headers.is_empty() {
                 for header in response_headers {
                     if reveal_value {
-                        builder.reveal_recv(&header)?;
+                        proof_builder.reveal_recv(header)?;
                     } else {
-                        builder.reveal_recv(&header.without_value())?;
+                        proof_builder.reveal_recv(&header.without_value())?;
                     }
                 }
             }
         }
     }
 
-    if reveal_recv.reveal_whole_body {
-        builder.reveal_recv(&response.body)?;
+    if reveal.recv.reveal_whole_body.unwrap_or(false) {
+        if let Some(body) = &response.body {
+            proof_builder.reveal_recv(body)?;
+        }
     } else {
-        match &response.body.as_ref().unwrap().content {
-            BodyContent::Json(json) => {
-                if reveal_recv.reveal_body_json_structure {
+        if let Some(body) = &response.body {
+            match &body.content {
+                BodyContent::Json(json) => {
+                    if reveal.recv.reveal_body_json_structure.unwrap_or(false) {
                     // TODO: Implement
-                }
+                    }
 
-                if let Some(paths) = reveal_recv.body_json_paths {
-                    for path in paths {
-                        builder.reveal_recv(json.get(path).unwrap())?;
+                    if let Some(paths) = reveal.recv.body_json_paths {
+                        for path in paths {
+                            proof_builder.reveal_recv(json.get(path.as_str()).unwrap())?;
+                        }
                     }
                 }
-            }
 
-            BodyContent::Unknown(span) => {
-                builder.reveal_recv(span)?;
-            }
+                BodyContent::Unknown(span) => {
+                    proof_builder.reveal_recv(span)?;
+                }
 
-            _ => {}
+                _ => {}
+            }
         }
     }
 
-    let transcript_proof = builder.build()?;
-
-    // Use default crypto provider to build the presentation.
-    let provider = CryptoProvider::default();
-
-    let mut builder = attestation.0.presentation_builder(&provider);
+    builder.transcript_proof(proof_builder.build()?);
 
     builder
-        .identity_proof(secrets.0.identity_proof())
-        .transcript_proof(transcript_proof);
-
-    let presentation: Presentation = builder.build()?;
-
-    Ok(presentation)
+        .build()
+        .map(Presentation::from)
+        .map_err(JsError::from)
 }

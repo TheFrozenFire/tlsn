@@ -9,8 +9,9 @@ use hyper::body::Bytes;
 use tls_client_async::TlsConnection;
 use tlsn_core::{
     request::RequestConfig,
-    transcript::{Idx, TranscriptCommitConfigBuilder},
+    transcript::{Idx, TranscriptCommitConfigBuilder, TranscriptCommitConfig},
 };
+use tlsn_formats::http::{DefaultHttpCommitter, HttpCommit, HttpTranscript};
 use tlsn_prover::{state, Prover};
 use tracing::info;
 use wasm_bindgen::{prelude::*, JsError};
@@ -106,6 +107,34 @@ impl JsProver {
         let prover = self.state.try_as_closed()?;
 
         Ok(Transcript::from(prover.transcript()))
+    }
+
+    // Runs the notarization protocol for an HTTP transcript.
+    pub async fn notarize_http(&mut self) -> Result<NotarizationOutput> {
+        let mut prover = self.state.take().try_into_closed()?.start_notarize();
+        
+        info!("starting notarization");
+
+        let transcript = HttpTranscript::parse(prover.transcript())?;
+
+        let mut builder = TranscriptCommitConfigBuilder::new(prover.transcript());
+
+        DefaultHttpCommitter::default().commit_transcript(&mut builder, &transcript)?;
+
+        let config = builder.build()?;
+        prover.transcript_commit(config);
+
+        let request_config = RequestConfig::default();
+        let (attestation, secrets) = prover.finalize(&request_config).await?;
+
+        info!("notarization complete");
+
+        self.state = State::Complete;
+
+        Ok(NotarizationOutput {
+            attestation: attestation.into(),
+            secrets: secrets.into(),
+        })
     }
 
     /// Runs the notarization protocol.
