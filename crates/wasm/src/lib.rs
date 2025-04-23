@@ -15,7 +15,7 @@ pub mod verifier;
 pub use log::{LoggingConfig, LoggingLevel};
 
 use tlsn_core::{transcript::Direction, CryptoProvider};
-use tlsn_formats::http::{BodyContent, HttpTranscript};
+use tlsn_formats::{ http::{BodyContent, HttpTranscript}, spansy::json::JsonValue };
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -77,6 +77,59 @@ pub fn build_presentation(
         .build()
         .map(Presentation::from)
         .map_err(JsError::from)
+}
+
+/// Recursively reveals the structure of a JSON value
+fn reveal_json_structure(
+    proof_builder: &mut tlsn_core::transcript::TranscriptProofBuilder,
+    json: &JsonValue,
+    direction: Direction,
+) -> Result<(), JsError> {
+    match json {
+        JsonValue::Object(object) => {
+            // Reveal the object structure without its pairs
+            match direction {
+                Direction::Sent => {
+                    proof_builder.reveal_sent(&object.without_pairs())?;
+                }
+                Direction::Received => {
+                    proof_builder.reveal_recv(&object.without_pairs())?;
+                }
+            }
+
+            // Reveal each key-value pair structure
+            for keyvalue in &object.elems {
+                match direction {
+                    Direction::Sent => {
+                        proof_builder.reveal_sent(&keyvalue.without_value())?;
+                    }
+                    Direction::Received => {
+                        proof_builder.reveal_recv(&keyvalue.without_value())?;
+                    }
+                }
+
+                // Recursively reveal the value's structure
+                reveal_json_structure(proof_builder, &keyvalue.value, direction)?;
+            }
+        }
+        JsonValue::Array(array) => {
+            // Reveal array structure
+            match direction {
+                Direction::Sent => {
+                    proof_builder.reveal_sent(&array.without_values())?;
+                }
+                Direction::Received => {
+                    proof_builder.reveal_recv(&array.without_values())?;
+                }
+            }
+            
+            for value in &array.elems {
+                reveal_json_structure(proof_builder, value, direction)?;
+            }
+        }
+        _ => {} // For primitive values, no structure to reveal
+    }
+    Ok(())
 }
 
 // Builds a presentation from an HTTP transcript.
@@ -141,7 +194,7 @@ pub fn build_http_presentation(
             match &body.content {
                 BodyContent::Json(json) => {
                     if reveal.sent.reveal_body_json_structure.unwrap_or(false) {
-                        // TODO: Implement
+                        reveal_json_structure(&mut proof_builder, json, Direction::Sent)?;
                     }
 
                     if let Some(paths) = reveal.sent.body_json_paths {
@@ -201,7 +254,7 @@ pub fn build_http_presentation(
             match &body.content {
                 BodyContent::Json(json) => {
                     if reveal.recv.reveal_body_json_structure.unwrap_or(false) {
-                    // TODO: Implement
+                        reveal_json_structure(&mut proof_builder, json, Direction::Received)?;
                     }
 
                     if let Some(paths) = reveal.recv.body_json_paths {
