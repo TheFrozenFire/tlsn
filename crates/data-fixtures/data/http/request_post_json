@@ -2,5 +2,6 @@ POST /hello HTTP/1.1
 Host: localhost
 Content-Length: 44
 Content-Type: application/json
+Cookie: very-secret-cookie
 
 {"foo": "bar", "bazz": 123, "buzz": [1,"5"]}

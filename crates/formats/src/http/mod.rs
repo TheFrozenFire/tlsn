@@ -52,7 +52,7 @@ impl HttpTranscript {
     /// setting all unauthenticated data to null bytes.
     pub fn parse_partial(transcript: &PartialTranscript) -> Result<Self, spansy::ParseError> {
         let mut parseable = transcript.clone();
-        parseable.set_unauthed(0);
+        parseable.set_unauthed(b'*');
 
         let requests = Requests::new(Bytes::copy_from_slice(parseable.sent_unsafe()))
             .collect::<Result<Vec<_>, _>>()?;
@@ -108,6 +108,13 @@ mod tests {
 
         let mut request_ranges = request.span().to_range_set();
 
+        request_ranges = request
+            .headers
+            .iter()
+            .filter(|h| !matches!(h.name.as_str(), "Host" | "Content-Length" | "Content-Type"))
+            .map(|h| h.value.span().to_range_set())
+            .fold(request_ranges, |acc, e| acc.difference(&e));
+
         if let Some(body) = &request.body {
             if let BodyContent::Json(json) = &body.content {
                 let mut collector = JsonLiteralCollector::new();
@@ -122,6 +129,42 @@ mod tests {
         }
 
         let partial_transcript = transcript.to_partial(Idx::new(request_ranges), Idx::new([]));
+
+        HttpTranscript::parse_partial(&partial_transcript).unwrap();
+    }
+
+    #[rstest]
+    #[case::ok_empty(fixtures::response::OK_EMPTY)]
+    #[case::ok_empty_header(fixtures::response::OK_EMPTY_HEADER)]
+    #[case::ok_text(fixtures::response::OK_TEXT)]
+    #[case::ok_json(fixtures::response::OK_JSON)]
+    fn test_http_transcript_parse_partial_response(#[case] src: &'static [u8]) {
+        let transcript = Transcript::new(fixtures::request::GET_EMPTY, src);
+        let response = parse_response(src).unwrap();
+
+        let mut response_ranges = response.span().to_range_set();
+
+        response_ranges = response
+            .headers
+            .iter()
+            .filter(|h| !matches!(h.name.as_str(), "Content-Length" | "Content-Type"))
+            .map(|h| h.value.span().to_range_set())
+            .fold(response_ranges, |acc, e| acc.difference(&e));
+
+        if let Some(body) = &response.body {
+            if let BodyContent::Json(json) = &body.content {
+                let mut collector = JsonLiteralCollector::new();
+                collector.visit_value(json);
+
+                response_ranges = collector
+                    .literals
+                    .iter()
+                    .map(|e| e.to_range_set())
+                    .fold(response_ranges, |acc, e| acc.difference(&e));
+            }
+        }
+        
+        let partial_transcript = transcript.to_partial(Idx::new([0..transcript.sent().len()]), Idx::new(response_ranges));
 
         HttpTranscript::parse_partial(&partial_transcript).unwrap();
     }
