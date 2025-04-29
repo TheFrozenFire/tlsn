@@ -17,3 +17,4 @@ thiserror = { workspace = true }
 tlsn-core = { workspace = true, features = ["fixtures"] }
 tlsn-data-fixtures = { workspace = true }
 rstest = { workspace = true }
+rangeset = { workspace = true }

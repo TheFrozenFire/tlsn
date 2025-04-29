@@ -71,6 +71,7 @@ pub trait JsonCommit {
             JsonValue::Number(number) => self.commit_number(builder, number, direction),
             JsonValue::Bool(boolean) => self.commit_bool(builder, boolean, direction),
             JsonValue::Null(null) => self.commit_null(builder, null, direction),
+            JsonValue::Redacted(_) => Err(JsonCommitError::new("cannot commit redacted value")),
         }
     }
 
