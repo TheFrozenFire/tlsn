@@ -11,6 +11,7 @@ use tlsn_prover::{Prover, ProverConfig};
 use tlsn_server_fixture::bind;
 use tlsn_server_fixture_certs::{CA_CERT_DER, SERVER_DOMAIN};
 use tlsn_verifier::{Verifier, VerifierConfig};
+use tlsn_formats::http::{HttpContext, DefaultHttpCommitter, HttpCommit, HttpTranscript};
 
 use http_body_util::{BodyExt as _, Empty};
 use hyper::{body::Bytes, Request, StatusCode};
@@ -25,7 +26,6 @@ const MAX_SENT_DATA: usize = 1 << 12;
 const MAX_RECV_DATA: usize = 1 << 14;
 
 #[tokio::test]
-#[ignore]
 async fn notarize() {
     tracing_subscriber::fmt::init();
 
@@ -99,14 +99,12 @@ async fn prover<T: AsyncWrite + AsyncRead + Send + Unpin + 'static>(notary_socke
     let _ = server_task.await.unwrap();
 
     let mut prover = prover_task.await.unwrap().unwrap().start_notarize();
-    let sent_tx_len = prover.transcript().sent().len();
-    let recv_tx_len = prover.transcript().received().len();
+    
+    let transcript = HttpTranscript::parse(prover.transcript()).unwrap();
 
     let mut builder = TranscriptCommitConfig::builder(prover.transcript());
 
-    // Commit to everything
-    builder.commit_sent(&(0..sent_tx_len)).unwrap();
-    builder.commit_recv(&(0..recv_tx_len)).unwrap();
+    DefaultHttpCommitter::default().commit_transcript(&mut builder, &transcript).unwrap();
 
     let config = builder.build().unwrap();
 
@@ -121,7 +119,26 @@ async fn prover<T: AsyncWrite + AsyncRead + Send + Unpin + 'static>(notary_socke
 
     let config = builder.build().unwrap();
 
-    let (attestation, _) = prover.finalize(&config).await.unwrap();
+    let (attestation, secrets) = prover.finalize(&config).await.unwrap();
+
+    let provider = CryptoProvider::default();
+
+    let mut builder = secrets.transcript_proof_builder();
+
+    transcript.reveal_structure(&mut builder).unwrap();
+
+    let transcript_proof = builder.build().unwrap();
+
+    let mut builder = attestation.presentation_builder(&provider);
+
+    builder.transcript_proof(transcript_proof);
+
+    let presentation = builder.build().unwrap();
+
+    let context = HttpContext::builder(&provider, presentation).build().unwrap();
+
+    
+    
 
     assert_eq!(attestation.body.extensions().count(), 1);
 }

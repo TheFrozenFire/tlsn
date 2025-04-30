@@ -9,12 +9,13 @@ pub use context::HttpContext;
 
 #[doc(hidden)]
 pub use spansy::http;
+use spansy::json::JsonValue;
 
 pub use http::{
     parse_request, parse_response, Body, BodyContent, Header, HeaderName, HeaderValue, Method,
     Reason, Request, RequestLine, Requests, Response, Responses, Status, Target,
 };
-use tlsn_core::transcript::{PartialTranscript, Transcript};
+use tlsn_core::transcript::{PartialTranscript, Transcript, TranscriptProofBuilder, Direction, TranscriptProofBuilderError};
 
 /// The kind of HTTP message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -63,6 +64,112 @@ impl HttpTranscript {
             requests,
             responses,
         })
+    }
+
+    fn reveal_json_structure(&self, builder: &mut TranscriptProofBuilder, direction: Direction, json: &JsonValue) -> Result<(), TranscriptProofBuilderError> {
+        match json {
+            JsonValue::Object(object) => {
+                // Reveal the object structure without its pairs
+                match direction {
+                    Direction::Sent => {
+                        builder.reveal_sent(&object.without_pairs())?;
+                    }
+                    Direction::Received => {
+                        builder.reveal_recv(&object.without_pairs())?;
+                    }
+                }
+    
+                // Reveal each key-value pair structure
+                for keyvalue in &object.elems {
+                    match direction {
+                        Direction::Sent => {
+                            builder.reveal_sent(&keyvalue.without_value())?;
+                        }
+                        Direction::Received => {
+                            builder.reveal_recv(&keyvalue.without_value())?;
+                        }
+                    }
+    
+                    // Recursively reveal the value's structure
+                    self.reveal_json_structure(builder, direction, &keyvalue.value)?;
+                }
+            }
+            JsonValue::Array(array) => {
+                // Reveal array structure
+                match direction {
+                    Direction::Sent => {
+                        builder.reveal_sent(&array.without_values())?;
+                    }
+                    Direction::Received => {
+                        builder.reveal_recv(&array.without_values())?;
+                    }
+                }
+                
+                for value in &array.elems {
+                    self.reveal_json_structure(builder, direction, value)?;
+                }
+            }
+            _ => {} // For primitive values, no structure to reveal
+        }
+
+        Ok(())
+    }
+
+    /// Reveals the structure of the HTTP transcript.
+    pub fn reveal_structure(&self, builder: &mut TranscriptProofBuilder) -> Result<(), TranscriptProofBuilderError> {
+        for request in &self.requests {
+            builder.reveal_sent(&request.without_data())?;
+            builder.reveal_sent(&request.request.target)?;
+            
+            for header in &request.headers {
+                builder.reveal_sent(&header.without_value())?;
+            }
+
+            if let Some(body) = &request.body {
+                match &body.content {
+                    BodyContent::Json(json) => {
+                        self.reveal_json_structure(builder, Direction::Sent, json)?;
+                    }
+                    
+                    BodyContent::Unknown(unknown) => {
+                        builder.reveal_sent(unknown)?;
+                    }
+
+                    _ => {}
+                }
+            }
+        }
+
+        for response in &self.responses {
+            builder.reveal_recv(&response.without_data())?;
+
+            for header in &response.headers {
+                match header.name.as_str().to_lowercase().as_str() {
+                    "host" | "content-length" | "content-type" => {
+                        builder.reveal_recv(header)?;
+                    }
+                    _ => {
+                        builder.reveal_recv(&header.without_value())?;
+                    }
+                }
+            }
+
+            if let Some(body) = &response.body {
+                match &body.content {
+                    BodyContent::Json(json) => {
+                        self.reveal_json_structure(builder, Direction::Received, json)?;
+                    }
+
+                    BodyContent::Unknown(unknown) => {
+                        builder.reveal_recv(unknown)?;
+                    }
+
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
