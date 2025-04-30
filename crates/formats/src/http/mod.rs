@@ -99,9 +99,11 @@ impl HttpTranscript {
                 match direction {
                     Direction::Sent => {
                         builder.reveal_sent(&array.without_values())?;
+                        builder.reveal_sent(&array.separators())?;
                     }
                     Direction::Received => {
                         builder.reveal_recv(&array.without_values())?;
+                        builder.reveal_recv(&array.separators())?;
                     }
                 }
                 
@@ -123,6 +125,12 @@ impl HttpTranscript {
             
             for header in &request.headers {
                 builder.reveal_sent(&header.without_value())?;
+            }
+
+            for header_name in ["host", "content-length", "content-type"] {
+                if let Some(header) = request.headers_with_name(header_name).next() {
+                    builder.reveal_sent(header)?;
+                }
             }
 
             if let Some(body) = &request.body {

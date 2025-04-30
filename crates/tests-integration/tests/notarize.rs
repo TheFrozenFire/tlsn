@@ -4,7 +4,7 @@ use tlsn_core::{
     attestation::{AttestationConfig, Extension},
     request::RequestConfig,
     signing::SignatureAlgId,
-    transcript::TranscriptCommitConfig,
+    transcript::{Transcript, TranscriptCommitConfig},
     CryptoProvider,
 };
 use tlsn_prover::{Prover, ProverConfig};
@@ -82,7 +82,7 @@ async fn prover<T: AsyncWrite + AsyncRead + Send + Unpin + 'static>(notary_socke
     tokio::spawn(connection);
 
     let request = Request::builder()
-        .uri(format!("https://{}/bytes?size=16000", SERVER_DOMAIN))
+        .uri(format!("https://{}/formats/json?size=1", SERVER_DOMAIN))
         .header("Host", SERVER_DOMAIN)
         .header("Connection", "close")
         .method("GET")
@@ -134,10 +134,20 @@ async fn prover<T: AsyncWrite + AsyncRead + Send + Unpin + 'static>(notary_socke
     builder.transcript_proof(transcript_proof);
 
     let presentation = builder.build().unwrap();
+    let verified = presentation.verify(&provider).unwrap();
 
-    let context = HttpContext::builder(&provider, presentation).build().unwrap();
+    let json_response_data = include_str!("../../server-fixture/server/src/data/1kb.json");
+    let http_request = format!("GET /formats/json?size=1 HTTP/1.1\r\nHost: {}\r\n\r\n", SERVER_DOMAIN);
+    let http_response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}", json_response_data.len(), json_response_data);
 
-    
+    let structure = HttpTranscript::parse(&Transcript::new(http_request, http_response)).unwrap();
+
+    let context = HttpContext::builder(verified, structure).build();
+
+    if let Err(e) = context {
+        println!("{}", e);
+        panic!("Failed to build context");
+    }
     
 
     assert_eq!(attestation.body.extensions().count(), 1);

@@ -13,6 +13,7 @@ bytes = { workspace = true }
 spansy = { workspace = true, features = ["serde"] }
 rangeset = { workspace = true }
 thiserror = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 tlsn-core = { workspace = true, features = ["fixtures"] }

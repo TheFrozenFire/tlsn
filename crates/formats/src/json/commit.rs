@@ -160,16 +160,9 @@ pub trait JsonCommit {
             })?;
 
             // Commit to the separators and whitespace of the array
-            let array_range: RangeSet<usize> = array.to_range_set().difference(&without_values);
-            let difference = array
-                .elems
-                .iter()
-                .map(|e| e.to_range_set())
-                .fold(array_range.clone(), |acc, range| acc.difference(&range));
-
-            for range in difference.iter_ranges() {
+            for range in array.separators().iter_ranges() {
                 builder.commit(&range, direction).map_err(|e| {
-                    JsonCommitError::new_with_source("failed to commit array element", e)
+                    JsonCommitError::new_with_source("failed to commit array separators", e)
                 })?;
             }
 
