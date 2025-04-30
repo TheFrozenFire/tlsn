@@ -5,7 +5,7 @@ mod context;
 
 use bytes::Bytes;
 pub use commit::{DefaultHttpCommitter, HttpCommit, HttpCommitError};
-pub use context::HttpContext;
+pub use context::{HttpContext, BodyContext};
 
 #[doc(hidden)]
 pub use spansy::http;
