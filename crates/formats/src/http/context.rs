@@ -46,20 +46,26 @@ impl HttpContextBuilder {
         let structure_target = structure_request.request.target.as_str();
         let request_target = request.request.target.as_str();
 
-        if structure_target.starts_with("/") {
-            if request_target.starts_with("/") {
-                assert_eq!(request_target, structure_target, "Request target mismatch");
-            } else {
-                let request_url = url::Url::parse(request_target)?;
-                let path_and_query = if let Some(query) = request_url.query() {
-                    format!("{}?{}", request_url.path(), query)
-                } else {
-                    request_url.path().to_string()
-                };
-                assert_eq!(path_and_query, structure_target, "Request target mismatch");
-            }
+        let base = url::Url::parse("https://example.com")?;
+
+        let structure_url = base.join(structure_target)?;
+        let request_url = base.join(request_target)?;
+
+        let structure_path_and_query = if let Some(query) = structure_url.query() {
+            format!("{}?{}", structure_url.path(), query)
         } else {
-            assert_eq!(request_target, structure_target, "Request target mismatch");
+            structure_url.path().to_string()
+        };
+
+        let request_path_and_query = if let Some(query) = request_url.query() {
+            format!("{}?{}", request_url.path(), query)
+        } else {
+            request_url.path().to_string()
+        };
+
+        assert_eq!(request_path_and_query, structure_path_and_query, "Request target mismatch");
+        if !structure_target.starts_with("/") {
+            assert_eq!(request_url.host_str(), structure_url.host_str(), "Request target mismatch");
         }
 
         Ok(())
